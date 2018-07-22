@@ -1,10 +1,14 @@
+// Program requirements
 require(`dotenv`).config();
 const mysql = require(`mysql`);
 const cTable = require(`console.table`);
 const inquirer = require(`inquirer`);
 const Table = require(`easy-table`);
+
+// Set const evn to value of process.env file via dotenv package
 const env = process.env;
 
+// Created connection to mysql database using .env
 const connection = mysql.createConnection({
     host: env.DB_HOST,
     port: env.DB_PORT,
@@ -13,72 +17,44 @@ const connection = mysql.createConnection({
     database: env.DB
 });
 
+// Start the chain of prompts
 getItems();
 
-function purchase(rawItemData) {
-    firstQuestion(rawItemData)
-        .then((firstAnswer) => {
-            let productID = parseInt(firstAnswer.productID);
-            secondQuestion(rawItemData, productID)
-                .then((secondAnswer) => {
-                    let amount = parseInt(secondAnswer.amount);
-                    let item = rawItemData.find((itemData) => itemData.item_id === productID);
-                    confirmPurchase(amount, item)
-                        .then((confirmation) => {
-                            if (confirmation.choice) {
-                                completePurchase(item, amount, rawItemData, purchaseAgain);
-                            }
-                            else {
-                                console.log(`Order cancelled.`);
-                                purchaseAgain()
-                                    .then((confirmation) => {
-                                        if (confirmation.choice) {
-                                            getItems();
-                                        }
-                                        else {
-                                            console.log(`Goodbye!`);
-                                            connection.end();
-                                        }
-                                    })
-                            }
-                        });
+// ===== Program flow ===== //
+//
+// getItems() -> purchase() -> firstQuestion().then( secondQuestion.then( confirmPurchase.then( branch 1:2 ) ) )
+//      branch1: completePurchase() -> purchaseAgain().then( branch 1.1:1.2 )
+//          branch1.1: getItems() -> start over
+//          branch1.2: connection.end() -> terminate program
+//      branch2: purchaseAgain().then( branch 2.1:2.2 )
+//          branch2.1: getItems() -> start over
+//          branch2.2: connection.end() -> terminate program
+
+// ===== Begin Function Declarations ===== //
+
+/*
+ * 
+ * 
+ *  */
+function completePurchase(item, amount, callback) {
+    connection.query(`UPDATE products SET stock_quantity = ? WHERE product_name = ?`,
+        [item.stock_quantity - amount, item.product_name], (err, res) => {
+            if (err) throw err;
+            console.log(`Purchase completed!`);
+            callback()
+                .then((confirmation) => {
+                    if (confirmation.choice) {
+                        getItems();
+                    }
+                    else {
+                        console.log(`Goodbye!`);
+                        connection.end();
+                    }
                 });
         });
 }
 
-function validateAmount(input, itemData) {
-    if (isNaN(input) || input < 1) {
-        return `Your response must be a positive, non-zero number`;
-    }
-    else if (input > itemData.stock_quantity) {
-        return `There is not enough stock to fulfill your order (In Stock: ${itemData.stock_quantity})`;
-    }
-    else return true;
-}
-
-function firstQuestion(rawItemData) {
-    return inquirer.prompt({
-        type: `input`,
-        message: `Enter the item ID of the product you would like to purchase: `,
-        name: `productID`,
-        validate: (input) => rawItemData
-            .map((itemData) => itemData.item_id)
-            .includes(parseInt(input)) ? true : `Invalid item ID, please try again`
-    });
-}
-
-function secondQuestion(rawItemData, productID) {
-    return inquirer.prompt({
-        type: `input`,
-        message: `How many units of ${rawItemData
-            .reduce(((itemName, item) => item.item_id === productID ?
-                itemName += item.product_name : itemName += ``), ``)} `
-            + `would you like to purchase? `,
-        name: `amount`,
-        validate: (input) => validateAmount(input, rawItemData.find((item) => item.item_id === productID))
-    });
-}
-
+/* */
 function confirmPurchase(amount, item) {
     let textData = [
         { leftCol: `Item Name:`, rightCol: item.product_name },
@@ -113,24 +89,65 @@ function confirmPurchase(amount, item) {
     });
 }
 
-function completePurchase(item, amount, rawItemData, callback) {
-    connection.query(`UPDATE products SET stock_quantity = ? WHERE product_name = ?`,
-        [item.stock_quantity - amount, item.product_name], (err, res) => {
-            if (err) throw err;
-            console.log(`Purchase completed!`);
-            callback()
-                .then((confirmation) => {
-                    if (confirmation.choice) {
-                        getItems();
-                    }
-                    else {
-                        console.log(`Goodbye!`);
-                        connection.end();
-                    }
+/* */
+function firstQuestion(rawItemData) {
+    return inquirer.prompt({
+        type: `input`,
+        message: `Enter the item ID of the product you would like to purchase: `,
+        name: `productID`,
+        validate: (input) => rawItemData
+            .map((itemData) => itemData.item_id)
+            .includes(parseInt(input)) ? true : `Invalid item ID, please try again`
+    });
+}
+
+/* */
+function getItems() {
+    connection.query(`SELECT * FROM products`, (err, res) => {
+        if (err) throw err;
+        if (res.length === 0) {
+            console.log(`There are no items for sale...`);
+        }
+        else {
+            console.table(res);
+        }
+        purchase(res);
+    });
+}
+
+/* */
+function purchase(rawItemData) {
+    firstQuestion(rawItemData)
+        .then((firstAnswer) => {
+            let productID = parseInt(firstAnswer.productID);
+            secondQuestion(rawItemData, productID)
+                .then((secondAnswer) => {
+                    let amount = parseInt(secondAnswer.amount);
+                    let item = rawItemData.find((itemData) => itemData.item_id === productID);
+                    confirmPurchase(amount, item)
+                        .then((confirmation) => {
+                            if (confirmation.choice) {
+                                completePurchase(item, amount, purchaseAgain);
+                            }
+                            else {
+                                console.log(`Order cancelled.`);
+                                purchaseAgain()
+                                    .then((confirmation) => {
+                                        if (confirmation.choice) {
+                                            getItems();
+                                        }
+                                        else {
+                                            console.log(`Goodbye!`);
+                                            connection.end();
+                                        }
+                                    })
+                            }
+                        });
                 });
         });
 }
 
+/* */
 function purchaseAgain() {
     return inquirer.prompt({
         type: `confirm`,
@@ -139,10 +156,26 @@ function purchaseAgain() {
     });
 }
 
-function getItems() {
-    connection.query(`SELECT * FROM products`, (err, res) => {
-        if (err) throw err;
-        console.table(res);
-        purchase(res);
+/* */
+function secondQuestion(rawItemData, productID) {
+    return inquirer.prompt({
+        type: `input`,
+        message: `How many units of ${rawItemData
+            .reduce(((itemName, item) => item.item_id === productID ?
+                itemName += item.product_name : itemName += ``), ``)} `
+            + `would you like to purchase? `,
+        name: `amount`,
+        validate: (input) => validateAmount(input, rawItemData.find((item) => item.item_id === productID))
     });
+}
+
+/* */
+function validateAmount(input, itemData) {
+    if (isNaN(input) || input < 1) {
+        return `Your response must be a positive, non-zero number`;
+    }
+    else if (input > itemData.stock_quantity) {
+        return `There is not enough stock to fulfill your order (In Stock: ${itemData.stock_quantity})`;
+    }
+    else return true;
 }
