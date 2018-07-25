@@ -46,10 +46,10 @@ menu();
 
 function menu() {
     const choices = [
-        `View Products for Sale`,
+        `View All Products for Sale`,
         `View Low Inventory`,
-        `Add to Inventory`,
-        `Add New Product`
+        `Add Stock to Inventory`,
+        `Add a New Product`
     ];
 
     inquirer.prompt({
@@ -140,52 +140,66 @@ function addToInventory() {
 function addNewProduct() {
     connection.query(`SELECT department_name FROM departments`, (err, res) => {
         if (err) throw err;
-        console.log(res);
-        connection.end();
+        let departmentList = res.map((department) => department.department_name);
+        inquirer.prompt([
+            {
+                type: `input`,
+                message: `What is the product's name? `,
+                name: `product_name`,
+                validate: (input) => typeof input === `string` && input.length > 0 ? true
+                    : `Invalid input: must be a string with at least one character`
+            },
+            {
+                type: `list`,
+                message: `What department does the item belong to? `,
+                name: `department_name`,
+                choices: departmentList
+            },
+            {
+                type: `input`,
+                message: `What is the price?`,
+                name: `price`,
+                validate: (input) => isNaN(input) && input > 0 ? `Input value must be a number greater than 0` : true
+            },
+            {
+                type: `input`,
+                message: `How many are in stock? `,
+                name: `stock_quantity`,
+                validate: (input) => isNaN(input) && input > 0 ? `Input value must be a number greater than 0` : true
+            }
+        ])
+            .then((answers) => {
+                let item = {
+                    product_name: answers.product_name,
+                    department_name: answers.department_name,
+                    price: answers.price,
+                    stock_quantity: answers.stock_quantity
+                };
+                console.log(`\nName: ${item.product_name} \n` +
+                    `Department: ${item.department_name} \n` +
+                    `Price: ${item.price} \n` +
+                    `Stock: ${item.stock_quantity} \n`);
+                inquirer.prompt({
+                    type: `confirm`,
+                    message: `Are you sure you'd like to add this item? `,
+                    name: `confirmation`
+                })
+                    .then((answer) => {
+                        if (answer.confirmation) {
+                            connection.query(`INSERT INTO products SET ?`,
+                                item,
+                                (error) => {
+                                    if (error) throw error;
+                                    console.log(`Product added successfully!`);
+                                    confirmRestart();
+                                });
+                        }
+                        else {
+                            confirmRestart();
+                        }
+                    });
+            });
     });
-    // inquirer.prompt([
-    //     {
-    //         type: `input`,
-    //         message: `What is the product's name? `,
-    //         name: `product_name`,
-    //         validate: (input) => typeof input === `string` && input.length > 0 ? true
-    //             : `Invalid input: must be a string with at least one character`
-    //     },
-    //     {
-    //         type: `input`,
-    //         message: `What department does the item belong to? `,
-    //         name: `department_name`,
-    //         validate: (input) => typeof input === `string` && input.length > 0 ? true
-    //             : `Invalid input: must be a string with at least one character`
-    //     },
-    //     {
-    //         type: `input`,
-    //         message: `What is the price?`,
-    //         name: `price`,
-    //         validate: (input) => isNaN(input) && input > 0 ? `Input value must be a number greater than 0` : true
-    //     },
-    //     {
-    //         type: `input`,
-    //         message: `How many are in stock? `,
-    //         name: `stock_quantity`,
-    //         validate: (input) => isNaN(input) && input > 0 ? `Input value must be a number greater than 0` : true
-    //     }
-    // ])
-    //     .then((answers) => {
-    //         let item = {
-    //             product_name: answers.product_name,
-    //             department_name: answers.department_name,
-    //             price: answers.price,
-    //             stock_quantity: answers.stock_quantity
-    //         };
-    //         connection.query(`INSERT INTO products SET ?`,
-    //             item,
-    //             (error) => {
-    //                 if (error) throw error;
-    //                 console.log(`Product added successfully!`);
-    //                 confirmRestart();
-    //             });
-    //     });
 }
 
 function confirmRestart() {
@@ -211,6 +225,7 @@ function printTableProducts(rowArray) {
         table.cell(`Department Name`, product.department_name);
         table.cell(`Price`, product.price, Table.number(2));
         table.cell(`Stock`, product.stock_quantity);
+        table.cell(`Sales Revenue`, product.product_sales);
         table.newRow();
     });
     return table.toString();
