@@ -17,7 +17,6 @@ const connection = mysql.createConnection({
     database: env.DB
 });
 
-
 /* 
 
 
@@ -86,7 +85,7 @@ function products() {
             console.log(`There are no items for sale...`);
         }
         else {
-            console.table(res);
+            console.log(printTableProducts(res));
         }
         confirmRestart();
     });
@@ -139,49 +138,54 @@ function addToInventory() {
 }
 
 function addNewProduct() {
-    inquirer.prompt([
-        {
-            type: `input`,
-            message: `What is the product's name? `,
-            name: `product_name`,
-            validate: (input) => typeof input === `string` && input.length > 0 ? true
-                : `Invalid input: must be a string with at least one character`
-        },
-        {
-            type: `input`,
-            message: `What department does the item belong to? `,
-            name: `department_name`,
-            validate: (input) => typeof input === `string` && input.length > 0 ? true
-                : `Invalid input: must be a string with at least one character`
-        },
-        {
-            type: `input`,
-            message: `What is the price?`,
-            name: `price`,
-            validate: (input) => isNaN(input) && input > 0 ? `Input value must be a number greater than 0` : true
-        },
-        {
-            type: `input`,
-            message: `How many are in stock? `,
-            name: `stock_quantity`,
-            validate: (input) => isNaN(input) && input > 0 ? `Input value must be a number greater than 0` : true
-        }
-    ])
-        .then((answers) => {
-            let item = {
-                product_name: answers.product_name,
-                department_name: answers.department_name,
-                price: answers.price,
-                stock_quantity: answers.stock_quantity
-            };
-            connection.query(`INSERT INTO products SET ?`,
-                item,
-                (error) => {
-                    if (error) throw error;
-                    console.log(`Product added successfully!`);
-                    confirmRestart();
-                });
-        });
+    connection.query(`SELECT department_name FROM departments`, (err, res) => {
+        if (err) throw err;
+        console.log(res);
+        connection.end();
+    });
+    // inquirer.prompt([
+    //     {
+    //         type: `input`,
+    //         message: `What is the product's name? `,
+    //         name: `product_name`,
+    //         validate: (input) => typeof input === `string` && input.length > 0 ? true
+    //             : `Invalid input: must be a string with at least one character`
+    //     },
+    //     {
+    //         type: `input`,
+    //         message: `What department does the item belong to? `,
+    //         name: `department_name`,
+    //         validate: (input) => typeof input === `string` && input.length > 0 ? true
+    //             : `Invalid input: must be a string with at least one character`
+    //     },
+    //     {
+    //         type: `input`,
+    //         message: `What is the price?`,
+    //         name: `price`,
+    //         validate: (input) => isNaN(input) && input > 0 ? `Input value must be a number greater than 0` : true
+    //     },
+    //     {
+    //         type: `input`,
+    //         message: `How many are in stock? `,
+    //         name: `stock_quantity`,
+    //         validate: (input) => isNaN(input) && input > 0 ? `Input value must be a number greater than 0` : true
+    //     }
+    // ])
+    //     .then((answers) => {
+    //         let item = {
+    //             product_name: answers.product_name,
+    //             department_name: answers.department_name,
+    //             price: answers.price,
+    //             stock_quantity: answers.stock_quantity
+    //         };
+    //         connection.query(`INSERT INTO products SET ?`,
+    //             item,
+    //             (error) => {
+    //                 if (error) throw error;
+    //                 console.log(`Product added successfully!`);
+    //                 confirmRestart();
+    //             });
+    //     });
 }
 
 function confirmRestart() {
@@ -197,4 +201,17 @@ function confirmRestart() {
                 connection.end();
             }
         });
+}
+
+function printTableProducts(rowArray) {
+    let table = new Table;
+    rowArray.forEach((product) => {
+        table.cell(`Product ID`, product.item_id);
+        table.cell(`Product Name`, product.product_name);
+        table.cell(`Department Name`, product.department_name);
+        table.cell(`Price`, product.price, Table.number(2));
+        table.cell(`Stock`, product.stock_quantity);
+        table.newRow();
+    });
+    return table.toString();
 }

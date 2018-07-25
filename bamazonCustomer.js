@@ -1,7 +1,6 @@
 // Program requirements
 require(`dotenv`).config();
 const mysql = require(`mysql`);
-const cTable = require(`console.table`);
 const inquirer = require(`inquirer`);
 const Table = require(`easy-table`);
 
@@ -32,13 +31,12 @@ getItems();
 
 // ===== Begin Function Declarations ===== //
 
-/*
- * 
- * 
+/** 
+ * @func completePurchase() 
  *  */
 function completePurchase(item, amount, callback) {
-    connection.query(`UPDATE products SET stock_quantity = ? WHERE product_name = ?`,
-        [item.stock_quantity - amount, item.product_name], (err, res) => {
+    connection.query(`UPDATE products SET stock_quantity = ?, product_sales = ? WHERE product_name = ?`,
+        [item.stock_quantity - amount, item.product_sales + (amount * item.price), item.product_name], (err, res) => {
             if (err) throw err;
             console.log(`Purchase completed!`);
             callback()
@@ -109,7 +107,7 @@ function getItems() {
             console.log(`There are no items for sale...`);
         }
         else {
-            console.table(res);
+            console.log(printTable(res));
         }
         purchase(res);
     });
@@ -178,4 +176,17 @@ function validateAmount(input, itemData) {
         return `There is not enough stock to fulfill your order (In Stock: ${itemData.stock_quantity})`;
     }
     else return true;
+}
+
+function printTable(rowArray) {
+    let table = new Table;
+    rowArray.forEach((product) => {
+        table.cell(`Product ID`, product.item_id);
+        table.cell(`Product Name`, product.product_name);
+        table.cell(`Department Name`, product.department_name);
+        table.cell(`Price`, product.price, Table.number(2));
+        table.cell(`Stock`, product.stock_quantity);
+        table.newRow();
+    });
+    return table.toString();
 }
